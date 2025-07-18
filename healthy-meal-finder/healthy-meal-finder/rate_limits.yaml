@@ -1,0 +1,9 @@
+# rate_limits.yaml
+free:
+  daily: 100
+pro:
+  daily: 10000
+partner123:
+  daily: 500
+admin:
+  daily: 100000 

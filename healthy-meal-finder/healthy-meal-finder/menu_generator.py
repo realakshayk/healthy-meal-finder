@@ -1,6 +1,6 @@
 # menu_generator.py
 
-# uvicorn main:app --reloadfrom menu_generator import generate_mock_menu
+from menu_generator import generate_mock_menu
 from fitness_goals import get_nutrition_rules
 from meal_utils import get_scored_meals
 

@@ -3,7 +3,7 @@
 import os
 import json
 import logging
-from typing import Dict, Optional, Tuple, Any
+from typing import Dict, Optional, Tuple
 from openai import OpenAI
 from dotenv import load_dotenv
 
@@ -33,17 +33,15 @@ class NutritionEstimator:
         else:
             self.client = OpenAI(api_key=self.api_key)
     
-    def estimate_nutrition(self, meal_description: str, serving_size: str = "1 serving") -> Dict[str, Any]:
+    def estimate_nutrition(self, meal_description: str, serving_size: str = "1 serving") -> Dict[str, int]:
         """
         Estimate nutrition information from a meal description.
-        Returns a dict with nutrition values and a confidence_score (0-100), plus fallback_used and warning_message if fallback.
+        Returns a dict with nutrition values and a confidence_score (0-100).
         """
         if not self.client:
             logger.warning("OpenAI client not available, using fallback estimation")
             nutrition = self._fallback_estimation(meal_description)
             nutrition["confidence_score"] = 70  # Lower confidence for fallback
-            nutrition["fallback_used"] = True
-            nutrition["warning_message"] = "OpenAI unavailable, used keyword-based fallback."
             return nutrition
         
         try:
@@ -80,22 +78,15 @@ class NutritionEstimator:
                 temperature=0.3,
                 max_tokens=200
             )
-            content = response.choices[0].message.content
-            if content is not None:
-                content = content.strip()
-            else:
-                raise ValueError("OpenAI response content is None")
+            content = response.choices[0].message.content.strip()
             nutrition_data = self._parse_nutrition_response(content)
             nutrition_data["confidence_score"] = 95  # High confidence for OpenAI
-            nutrition_data["fallback_used"] = False
             logger.info(f"Estimated nutrition for '{meal_description}': {nutrition_data}")
             return nutrition_data
         except Exception as e:
             logger.error(f"Error estimating nutrition: {e}")
             nutrition = self._fallback_estimation(meal_description)
             nutrition["confidence_score"] = 60  # Lower confidence for fallback after error
-            nutrition["fallback_used"] = True
-            nutrition["warning_message"] = f"OpenAI error: {e}. Used keyword-based fallback."
             return nutrition
     
     def _create_nutrition_prompt(self, meal_description: str, serving_size: str) -> str:
@@ -164,7 +155,7 @@ Consider typical portion sizes and cooking methods. Return only the JSON object.
             logger.error(f"Raw response: {response}")
             return self._fallback_estimation("")
     
-    def _fallback_estimation(self, meal_description: str) -> Dict[str, Any]:
+    def _fallback_estimation(self, meal_description: str) -> Dict[str, int]:
         """
         Provide fallback nutrition estimation when OpenAI is not available.
         

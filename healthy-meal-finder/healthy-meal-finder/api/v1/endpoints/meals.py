@@ -13,10 +13,6 @@ from core.goal_matcher import goal_matcher
 from utils.freeform_query_parser import parse_freeform_query
 from schemas.requests import FreeformMealSearchRequest
 from core.analytics import log_meal_returned, log_goal_searched, get_all_stats
-from core.error_handlers import (
-    InvalidGoalException, NoMealsFoundException, InvalidLocationException,
-    InvalidRadiusException, ExternalServiceException, ValidationException
-)
 
 logger = logging.getLogger(__name__)
 
@@ -160,7 +156,13 @@ async def find_meals_endpoint(
             suggestions = []
             for g in goals:
                 suggestions.extend(goal_matcher.get_suggestions(g))
-            raise InvalidGoalException(str(request.goal), suggestions)
+            suggestion_text = ""
+            if suggestions:
+                suggestion_text = f" Did you mean: {', '.join([f'{name} ({goal_id})' for goal_id, name, score in suggestions[:2]])}?"
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Could not understand fitness goal(s) '{request.goal}'.{suggestion_text}"
+            )
         # Log analytics for all searched goals
         for mg in matched_goals:
             log_goal_searched(mg)
@@ -196,7 +198,10 @@ async def find_meals_endpoint(
             if dish:
                 log_meal_returned(dish, dish)
         if not unique_meals:
-            raise NoMealsFoundException(request.radius_miles, request.lat, request.lon)
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"No meals found within {request.radius_miles} miles of the specified location"
+            )
         response_data = FindMealsResponse(
             meals=unique_meals,
             total_found=len(unique_meals),
@@ -212,11 +217,14 @@ async def find_meals_endpoint(
             api_version=api_version
         )
         
-    except (HTTPException, InvalidGoalException, NoMealsFoundException):
+    except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error finding meals: {str(e)}")
-        raise ExternalServiceException("Meal Service", "finding meals")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error while processing meal request"
+        )
 
 @router.post(
     "/freeform-search",
