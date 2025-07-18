@@ -1,0 +1,116 @@
+{
+  "info": {
+    "_postman_id": "b1e1c1e1-1234-5678-9abc-def012345678",
+    "name": "Healthy Meal Finder API v1",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Postman collection for all /api/v1/ endpoints of the Healthy Meal Finder API."
+  },
+  "item": [
+    {
+      "name": "Find Meals",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "X-API-Key", "value": "testkey123", "type": "text" },
+          { "key": "Content-Type", "value": "application/json", "type": "text" }
+        ],
+        "url": { "raw": "http://localhost:8000/api/v1/meals/find", "protocol": "http", "host": ["localhost"], "port": "8000", "path": ["api", "v1", "meals", "find"] },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"lat\": 40.7128,\n  \"lon\": -74.0060,\n  \"goal\": [\"keto\", \"muscle_gain\"],\n  \"radius_miles\": 5.0,\n  \"max_results\": 10,\n  \"exclude_ingredients\": [\"peanuts\", \"gluten\"]\n}"
+        }
+      }
+    },
+    {
+      "name": "Get Fitness Goals",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "X-API-Key", "value": "testkey123", "type": "text" }
+        ],
+        "url": { "raw": "http://localhost:8000/api/v1/meals/goals", "protocol": "http", "host": ["localhost"], "port": "8000", "path": ["api", "v1", "meals", "goals"] }
+      }
+    },
+    {
+      "name": "Get Nutrition Rules",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "X-API-Key", "value": "testkey123", "type": "text" }
+        ],
+        "url": { "raw": "http://localhost:8000/api/v1/meals/nutrition-rules/muscle_gain", "protocol": "http", "host": ["localhost"], "port": "8000", "path": ["api", "v1", "meals", "nutrition-rules", "muscle_gain"] }
+      }
+    },
+    {
+      "name": "Test Goal Matching",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "X-API-Key", "value": "testkey123", "type": "text" }
+        ],
+        "url": { "raw": "http://localhost:8000/api/v1/meals/match-goal/musle%20gain", "protocol": "http", "host": ["localhost"], "port": "8000", "path": ["api", "v1", "meals", "match-goal", "musle gain"] }
+      }
+    },
+    {
+      "name": "Estimate Nutrition",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "X-API-Key", "value": "testkey123", "type": "text" },
+          { "key": "Content-Type", "value": "application/json", "type": "text" }
+        ],
+        "url": { "raw": "http://localhost:8000/api/v1/nutrition/estimate", "protocol": "http", "host": ["localhost"], "port": "8000", "path": ["api", "v1", "nutrition", "estimate"] },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"meal_description\": \"Grilled chicken breast with quinoa and roasted vegetables\",\n  \"serving_size\": \"1 serving\"\n}"
+        }
+      }
+    },
+    {
+      "name": "Batch Nutrition Estimate",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "X-API-Key", "value": "testkey123", "type": "text" },
+          { "key": "Content-Type", "value": "application/json", "type": "text" }
+        ],
+        "url": { "raw": "http://localhost:8000/api/v1/nutrition/estimate-batch", "protocol": "http", "host": ["localhost"], "port": "8000", "path": ["api", "v1", "nutrition", "estimate-batch"] },
+        "body": {
+          "mode": "raw",
+          "raw": "[\n  {\n    \"meal_description\": \"Grilled chicken breast with quinoa\",\n    \"serving_size\": \"1 serving\"\n  },\n  {\n    \"meal_description\": \"Caesar salad with grilled salmon\",\n    \"serving_size\": \"1 large bowl\"\n  }\n]"
+        }
+      }
+    },
+    {
+      "name": "Validate Nutrition",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "X-API-Key", "value": "testkey123", "type": "text" }
+        ],
+        "url": { "raw": "http://localhost:8000/api/v1/nutrition/validate/485/34/29/21", "protocol": "http", "host": ["localhost"], "port": "8000", "path": ["api", "v1", "nutrition", "validate", "485", "34", "29", "21"] }
+      }
+    },
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "url": { "raw": "http://localhost:8000/api/v1/health/", "protocol": "http", "host": ["localhost"], "port": "8000", "path": ["api", "v1", "health", ""] }
+      }
+    },
+    {
+      "name": "Readiness Check",
+      "request": {
+        "method": "GET",
+        "url": { "raw": "http://localhost:8000/api/v1/health/ready", "protocol": "http", "host": ["localhost"], "port": "8000", "path": ["api", "v1", "health", "ready"] }
+      }
+    },
+    {
+      "name": "Detailed Status",
+      "request": {
+        "method": "GET",
+        "url": { "raw": "http://localhost:8000/api/v1/health/status", "protocol": "http", "host": ["localhost"], "port": "8000", "path": ["api", "v1", "health", "status"] }
+      }
+    }
+  ]
+} 

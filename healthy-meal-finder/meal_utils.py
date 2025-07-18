@@ -1,5 +1,7 @@
 # meal_utils.py
 
+from utils.goal_inference import goal_inference
+
 def score_meal(meal, rules):
     """
     Assigns a score based on how well the meal fits the nutrition rules.
@@ -23,9 +25,25 @@ def filter_by_distance(meals, max_distance):
     """
     return [meal for meal in meals if meal["distance_miles"] <= max_distance]
 
+def get_compatible_goals_with_confidence(meal):
+    """
+    Returns a list of compatible goals for a meal with confidence scores.
+    """
+    # Use OpenAI-based inference utility
+    result = goal_inference.infer_goal(
+        f"{meal.get('dish', '')}: {meal.get('description', '')}"
+    )
+    return [{
+        "goal_id": result["goal_id"],
+        "goal_name": result["goal_name"],
+        "confidence_score": result["confidence_score"],
+        "explanation": result["explanation"]
+    }]
+
 def get_scored_meals(meals, rules):
     """
     Scores each meal and returns sorted list from best to worst match.
+    Adds compatible_goals field to each meal.
     """
     scored = []
 
@@ -34,6 +52,7 @@ def get_scored_meals(meals, rules):
         if score > 0:
             meal_copy = meal.copy()
             meal_copy["score"] = score
+            meal_copy["compatible_goals"] = get_compatible_goals_with_confidence(meal)
             scored.append(meal_copy)
 
     # Sort descending by score
