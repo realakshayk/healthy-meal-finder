@@ -5,10 +5,13 @@ import httpx
 import os
 from dotenv import load_dotenv
 from typing import List, Dict, Any, Optional
+import shelve
+import time
 
 from fitness_goals import get_nutrition_rules
 from menu_generator import generate_mock_menu
 from meal_utils import get_scored_meals
+from mock_meals import mock_meals
 
 load_dotenv()
 
@@ -18,12 +21,15 @@ logger.setLevel(logging.INFO)
 GOOGLE_API_KEY = os.getenv("GOOGLE_MAPS_API_KEY")
 GOOGLE_PLACES_URL = "https://maps.googleapis.com/maps/api/place/nearbysearch/json"
 
+CACHE_FILE = "google_places_cache.db"
+CACHE_TTL = 60 * 60 * 24  # 24 hours
+
 class MealService:
     """
     Service class for meal-related operations.
     
     This service handles:
-    - Restaurant discovery via Google Places API
+    - Restaurant discovery via Google Places API (with local caching)
     - Menu generation and nutritional analysis
     - Meal scoring based on fitness goals
     """
@@ -33,39 +39,45 @@ class MealService:
         if not self.google_api_key:
             logger.warning("Google Maps API key not found. Restaurant discovery will be limited.")
     
-    def get_restaurants_from_google(self, lat: float, lon: float, radius_miles: float) -> List[Dict[str, Any]]:
+    def get_restaurants_from_google(self, lat: float, lon: float, radius_miles: float, keyword: str = "healthy") -> List[Dict[str, Any]]:
         """
-        Get restaurants from Google Places API.
-        
+        Get restaurants from Google Places API, with local file-based caching.
         Args:
             lat: Latitude coordinate
             lon: Longitude coordinate  
             radius_miles: Search radius in miles
-            
+            keyword: Keyword for filtering restaurants (default: "healthy")
         Returns:
             List of restaurant information dictionaries
         """
         if not self.google_api_key:
             logger.warning("No Google API key available, using mock restaurants")
-            return self._get_mock_restaurants(lat, lon, radius_miles)
+            return self._get_restaurants_from_mock_meals()
         
         radius_meters = int(radius_miles * 1609.34)
-        
+        cache_key = f"{lat:.4f},{lon:.4f}:{radius_miles:.2f}:{keyword}"
+        now = time.time()
+        # Try cache first
+        with shelve.open(CACHE_FILE) as cache:
+            if cache_key in cache:
+                cached = cache[cache_key]
+                if now - cached["timestamp"] < CACHE_TTL:
+                    logger.info(f"Returning cached Google Places results for {cache_key}")
+                    return cached["data"]
+                else:
+                    del cache[cache_key]
         params = {
             "location": f"{lat},{lon}",
             "radius": radius_meters,
             "type": "restaurant",
-            "keyword": "healthy",
+            "keyword": keyword,
             "key": self.google_api_key
         }
-        
         try:
             response = httpx.get(GOOGLE_PLACES_URL, params=params, timeout=10.0)
             response.raise_for_status()
-            
             places = response.json().get("results", [])
             restaurants = []
-            
             for place in places:
                 restaurants.append({
                     "name": place.get("name"),
@@ -75,66 +87,46 @@ class MealService:
                     "user_ratings_total": place.get("user_ratings_total"),
                     "location": place.get("geometry", {}).get("location", {}),
                     "types": place.get("types", []),
-                    "distance_miles": None  # Optional: calculate later
+                    "distance_miles": None
                 })
-            
+            if not restaurants:
+                logger.warning(f"Google Places API returned no results for {lat},{lon} (radius {radius_miles} mi). Falling back to mock meals.")
+                return self._get_restaurants_from_mock_meals()
             logger.info(f"Found {len(restaurants)} restaurants from Google Places API")
+            # Save to cache
+            with shelve.open(CACHE_FILE) as cache:
+                cache[cache_key] = {"timestamp": now, "data": restaurants}
             return restaurants
-            
         except httpx.RequestError as e:
             logger.error(f"Error calling Google Places API: {e}")
-            return self._get_mock_restaurants(lat, lon, radius_miles)
+            return self._get_restaurants_from_mock_meals()
         except Exception as e:
             logger.error(f"Unexpected error in Google Places API call: {e}")
-            return self._get_mock_restaurants(lat, lon, radius_miles)
-    
-    def _get_mock_restaurants(self, lat: float, lon: float, radius_miles: float) -> List[Dict[str, Any]]:
+            return self._get_restaurants_from_mock_meals()
+
+    def _get_restaurants_from_mock_meals(self) -> List[Dict[str, Any]]:
         """
-        Get mock restaurant data when Google API is unavailable.
-        
-        Args:
-            lat: Latitude coordinate
-            lon: Longitude coordinate
-            radius_miles: Search radius in miles
-            
-        Returns:
-            List of mock restaurant information
+        Return a list of restaurant info dicts based on mock_meals for fallback.
         """
-        mock_restaurants = [
-            {
-                "name": "Sweetgreen - SoHo",
-                "place_id": "mock_place_1",
-                "address": "123 Main St, New York, NY",
-                "rating": 4.5,
-                "user_ratings_total": 1250,
-                "location": {"lat": lat + 0.01, "lng": lon + 0.01},
-                "types": ["restaurant", "food", "establishment"],
-                "distance_miles": 1.2
-            },
-            {
-                "name": "Chipotle - Broadway", 
-                "place_id": "mock_place_2",
-                "address": "456 Broadway, New York, NY",
-                "rating": 4.2,
-                "user_ratings_total": 890,
-                "location": {"lat": lat - 0.01, "lng": lon - 0.01},
-                "types": ["restaurant", "food", "establishment"],
-                "distance_miles": 2.5
-            },
-            {
-                "name": "Dig - Park Ave",
-                "place_id": "mock_place_3", 
-                "address": "789 Park Ave, New York, NY",
-                "rating": 4.3,
-                "user_ratings_total": 567,
-                "location": {"lat": lat + 0.02, "lng": lon - 0.02},
-                "types": ["restaurant", "food", "establishment"],
-                "distance_miles": 3.1
-            }
-        ]
-        
-        logger.info(f"Using {len(mock_restaurants)} mock restaurants")
-        return mock_restaurants
+        # Extract unique restaurants from mock_meals
+        seen = set()
+        restaurants = []
+        for meal in mock_meals:
+            name = meal["restaurant"]
+            if name not in seen:
+                seen.add(name)
+                restaurants.append({
+                    "name": name,
+                    "place_id": f"mock_{name.lower().replace(' ', '_')}",
+                    "address": "Unknown address (mock)",
+                    "rating": None,
+                    "user_ratings_total": None,
+                    "location": {},
+                    "types": ["restaurant", "mock"],
+                    "distance_miles": meal.get("distance_miles")
+                })
+        logger.info(f"Using {len(restaurants)} mock restaurants from mock_meals fallback.")
+        return restaurants
     
     def find_meals(self, lat: float, lon: float, goal: str, radius_miles: float, max_results: Optional[int] = None) -> List[Dict[str, Any]]:
         """
@@ -170,10 +162,39 @@ class MealService:
             
             # Add restaurant info and goal match to each meal
             for item in scored_items:
-                item["goal_match"] = goal
-                item["restaurant_info"] = restaurant
-            
-            all_scored_meals.extend(scored_items)
+                # Transform flat nutrition fields to nested structure
+                nutrition = {
+                    "calories": item.get("calories", 0),
+                    "protein": item.get("protein", 0),
+                    "carbs": item.get("carbs", 0),
+                    "fat": item.get("fat", 0)
+                }
+                
+                # Create properly structured meal
+                structured_meal = {
+                    "restaurant": item["restaurant"],
+                    "dish": item["dish"],
+                    "description": item.get("description"),
+                    "nutrition": nutrition,
+                    "distance_miles": item.get("distance_miles", 0.0),
+                    "score": item["score"],
+                    "goal_match": goal,
+                    "restaurant_info": {
+                        "name": restaurant["name"],
+                        "place_id": restaurant["place_id"],
+                        "address": restaurant["address"],
+                        "rating": restaurant["rating"],
+                        "user_ratings_total": restaurant["user_ratings_total"],
+                        "location": {
+                            "lat": restaurant["location"].get("lat", 0.0) if restaurant["location"] else 0.0,
+                            "lng": restaurant["location"].get("lng", 0.0) if restaurant["location"] else 0.0
+                        },
+                        "types": restaurant["types"],
+                        "distance_miles": restaurant.get("distance_miles")
+                    }
+                }
+                
+                all_scored_meals.append(structured_meal)
         
         logger.info(f"Generated {len(all_scored_meals)} scored meals")
         

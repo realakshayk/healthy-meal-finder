@@ -7,11 +7,14 @@ from dotenv import load_dotenv
 from typing import List, Dict, Any, Optional
 import shelve
 import time
+import asyncio
 
 from fitness_goals import get_nutrition_rules
 from menu_generator import generate_mock_menu
 from meal_utils import get_scored_meals
 from mock_meals import mock_meals
+from services.menu_scraper import menu_scraper
+from utils.menu_parser import menu_parser
 
 load_dotenv()
 
@@ -128,7 +131,7 @@ class MealService:
         logger.info(f"Using {len(restaurants)} mock restaurants from mock_meals fallback.")
         return restaurants
     
-    def find_meals(self, lat: float, lon: float, goal: str, radius_miles: float, max_results: Optional[int] = None) -> List[Dict[str, Any]]:
+    async def find_meals(self, lat: float, lon: float, goal: str, radius_miles: float, max_results: Optional[int] = None, restaurant_limit: Optional[int] = None, cuisine: Optional[str] = None, flavor_profile: Optional[str] = None) -> List[Dict[str, Any]]:
         """
         Find meal recommendations based on location and fitness goal.
         
@@ -138,49 +141,125 @@ class MealService:
             goal: Fitness goal (muscle_gain, weight_loss, keto, balanced)
             radius_miles: Search radius in miles
             max_results: Maximum number of results to return
+            restaurant_limit: Maximum number of restaurants to process
+            cuisine: Preferred cuisine type (optional)
+            flavor_profile: Preferred flavor profile (optional)
             
         Returns:
             List of meal recommendations with scoring
         """
         logger.info(f"Finding meals for goal: {goal} at location ({lat}, {lon}) within {radius_miles} miles")
+        if cuisine:
+            logger.info(f"Cuisine preference: {cuisine}")
+        if flavor_profile:
+            logger.info(f"Flavor profile preference: {flavor_profile}")
         
         # Get restaurants
         restaurants = self.get_restaurants_from_google(lat, lon, radius_miles)
         logger.info(f"Found {len(restaurants)} restaurants")
         
-        # Get nutrition rules for the goal
-        rules = get_nutrition_rules(goal)
-        logger.info(f"Using nutrition rules for {goal}: {rules}")
+        # Limit restaurants based on user preference (default to 5 if not specified)
+        restaurant_limit = restaurant_limit or 5
+        restaurants = restaurants[:restaurant_limit]
+        logger.info(f"Processing {len(restaurants)} restaurants (limit: {restaurant_limit})")
+        
+        # Scrape menus from restaurants
+        menu_texts = await menu_scraper.scrape_multiple_restaurants(restaurants)
         
         all_scored_meals = []
         
-        # Generate meals for each restaurant
+        # Parse menus and generate meals
         for restaurant in restaurants:
-            name = restaurant["name"]
-            menu_items = generate_mock_menu(name)
-            scored_items = get_scored_meals(menu_items, rules)
+            restaurant_name = restaurant["name"]
+            menu_text = menu_texts.get(restaurant_name)
             
-            # Add restaurant info and goal match to each meal
-            for item in scored_items:
-                item["goal_match"] = goal
-                item["restaurant_info"] = restaurant
-            
-            all_scored_meals.extend(scored_items)
+            if menu_text:
+                # Parse menu using LLM
+                parsed_meals = menu_parser.parse_menu_text(menu_text, goal, restaurant_name, cuisine, flavor_profile)
+                
+                # Convert parsed meals to structured format
+                for meal in parsed_meals:
+                    structured_meal = {
+                        "restaurant": restaurant_name,
+                        "dish": meal["name"],
+                        "description": meal["description"],
+                        "price": meal.get("price"),
+                        "tags": meal.get("tags", []),
+                        "relevance_score": meal["relevance_score"],
+                        "goal_match": goal,
+                        "restaurant_info": {
+                            "name": restaurant["name"],
+                            "place_id": restaurant["place_id"],
+                            "address": restaurant["address"],
+                            "rating": restaurant["rating"],
+                            "user_ratings_total": restaurant["user_ratings_total"],
+                            "location": {
+                                "lat": restaurant["location"].get("lat", 0.0) if restaurant["location"] else 0.0,
+                                "lng": restaurant["location"].get("lng", 0.0) if restaurant["location"] else 0.0
+                            },
+                            "types": restaurant["types"],
+                            "distance_miles": restaurant.get("distance_miles"),
+                            "website": restaurant.get("website")
+                        }
+                    }
+                    all_scored_meals.append(structured_meal)
+            else:
+                # Fallback to mock data if scraping failed
+                logger.warning(f"Using mock data for {restaurant_name} (scraping failed)")
+                menu_items = generate_mock_menu(restaurant_name)
+                rules = get_nutrition_rules(goal)
+                scored_items = get_scored_meals(menu_items, rules)
+                
+                for item in scored_items:
+                    nutrition = {
+                        "calories": item.get("calories", 0),
+                        "protein": item.get("protein", 0),
+                        "carbs": item.get("carbs", 0),
+                        "fat": item.get("fat", 0)
+                    }
+                    
+                    structured_meal = {
+                        "restaurant": item["restaurant"],
+                        "dish": item["dish"],
+                        "description": item.get("description"),
+                        "nutrition": nutrition,
+                        "price": None,
+                        "tags": [],
+                        "relevance_score": item["score"] / 4.0,  # Convert 0-4 to 0-1
+                        "distance_miles": item.get("distance_miles", 0.0),
+                        "goal_match": goal,
+                        "restaurant_info": {
+                            "name": restaurant["name"],
+                            "place_id": restaurant["place_id"],
+                            "address": restaurant["address"],
+                            "rating": restaurant["rating"],
+                            "user_ratings_total": restaurant["user_ratings_total"],
+                            "location": {
+                                "lat": restaurant["location"].get("lat", 0.0) if restaurant["location"] else 0.0,
+                                "lng": restaurant["location"].get("lng", 0.0) if restaurant["location"] else 0.0
+                            },
+                            "types": restaurant["types"],
+                            "distance_miles": restaurant.get("distance_miles")
+                        }
+                    }
+                    all_scored_meals.append(structured_meal)
         
         logger.info(f"Generated {len(all_scored_meals)} scored meals")
         
-        # Sort by score and limit results
-        all_scored_meals.sort(key=lambda x: x["score"], reverse=True)
+        # Sort by relevance score and limit to 3-5 meals for Good Eats MVP
+        all_scored_meals.sort(key=lambda x: x["relevance_score"], reverse=True)
         
-        if max_results:
-            all_scored_meals = all_scored_meals[:max_results]
+        # Limit results based on user preference (default to 5 if not specified)
+        max_results = max_results or 5
+        all_scored_meals = all_scored_meals[:max_results]
+        logger.info(f"Returning {len(all_scored_meals)} meals (limit: {max_results})")
         
         return all_scored_meals
 
 # Global service instance
 meal_service = MealService()
 
-def find_meals(lat: float, lon: float, goal: str, radius_miles: float, max_results: Optional[int] = None) -> List[Dict[str, Any]]:
+async def find_meals(lat: float, lon: float, goal: str, radius_miles: float, max_results: Optional[int] = None, restaurant_limit: Optional[int] = None, cuisine: Optional[str] = None, flavor_profile: Optional[str] = None) -> List[Dict[str, Any]]:
     """
     Convenience function to find meals using the global service instance.
     
@@ -190,10 +269,13 @@ def find_meals(lat: float, lon: float, goal: str, radius_miles: float, max_resul
         goal: Fitness goal
         radius_miles: Search radius in miles
         max_results: Maximum number of results to return
+        restaurant_limit: Maximum number of restaurants to process
+        cuisine: Preferred cuisine type (optional)
+        flavor_profile: Preferred flavor profile (optional)
         
     Returns:
         List of meal recommendations
     """
-    return meal_service.find_meals(lat, lon, goal, radius_miles, max_results)
+    return await meal_service.find_meals(lat, lon, goal, radius_miles, max_results, restaurant_limit, cuisine, flavor_profile)
 
 

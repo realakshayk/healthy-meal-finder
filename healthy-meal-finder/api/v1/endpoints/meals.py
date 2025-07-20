@@ -41,9 +41,17 @@ router = APIRouter(
     meal recommendations that align with the specified fitness goal. The service:
     
     - Searches for healthy restaurants within the specified radius
-    - Analyzes menu items for nutritional content
+    - Scrapes restaurant websites for live menu data
+    - Uses AI to parse and analyze menu items
     - Scores meals based on fitness goal requirements
     - Returns top recommendations sorted by relevance
+    
+    **Customizable Parameters:**
+    - `radius_miles`: Search radius (0.5-10 miles)
+    - `restaurant_limit`: Number of restaurants to process (1-20)
+    - `max_results`: Number of meals to return (1-15)
+    - `cuisine`: Preferred cuisine type (optional)
+    - `flavor_profile`: Preferred flavor profile (optional)
     
     **Supported Fitness Goals:**
     - `muscle_gain`: High protein, moderate calories
@@ -167,12 +175,15 @@ async def find_meals_endpoint(
         # Find meals for any of the matched goals (union)
         all_meals = []
         for mg in matched_goals:
-            meals = find_meals(
+            meals = await find_meals(
                 lat=request.lat,
                 lon=request.lon,
                 goal=mg,
                 radius_miles=request.radius_miles,
-                max_results=request.max_results
+                max_results=request.max_results,
+                restaurant_limit=request.restaurant_limit,
+                cuisine=request.cuisine,
+                flavor_profile=request.flavor_profile
             )
             all_meals.extend(meals)
         # Remove duplicates by dish name
@@ -201,7 +212,7 @@ async def find_meals_endpoint(
             meals=unique_meals,
             total_found=len(unique_meals),
             search_radius=request.radius_miles,
-            goal=matched_goals if len(matched_goals) > 1 else matched_goals[0]
+            goal=matched_goals[0] if matched_goals else "balanced"
         )
         message = f"Meals found successfully for goals: {matched_goals}"
         return ApiResponse(
@@ -209,7 +220,13 @@ async def find_meals_endpoint(
             data=response_data,
             message=message,
             timestamp=datetime.utcnow().isoformat() + "Z",
-            api_version=api_version
+            api_version=api_version,
+            error=None,
+            detail=None,
+            status_code=None,
+            error_code=None,
+            trace_id=None,
+            support_link=None
         )
         
     except (HTTPException, InvalidGoalException, NoMealsFoundException):
@@ -249,9 +266,16 @@ async def freeform_meal_search(
         # In a real app, you might use IP geolocation or prompt for location
         return ApiResponse(
             success=False,
-            error="Location required for 'near me' searches.",
+            data=None,
             message="Please provide your latitude and longitude.",
-            api_version=api_version
+            error="Location required for 'near me' searches.",
+            detail="Location coordinates are required for 'near me' searches",
+            status_code=400,
+            timestamp=datetime.utcnow().isoformat() + "Z",
+            api_version=api_version,
+            error_code="ERR_LOCATION_REQUIRED",
+            trace_id=None,
+            support_link="https://support.healthymealfinder.com/errors/ERR_LOCATION_REQUIRED"
         )
     # Use existing meal search logic (mocked here)
     # You would call your meal_service.find_meals() with the mapped filters
@@ -268,7 +292,14 @@ async def freeform_meal_search(
             "lon": lon
         },
         message="Freeform query parsed successfully.",
-        api_version=api_version
+        error=None,
+        detail=None,
+        status_code=None,
+        timestamp=datetime.utcnow().isoformat() + "Z",
+        api_version=api_version,
+        error_code=None,
+        trace_id=None,
+        support_link=None
     )
 
 @router.get(
@@ -348,8 +379,14 @@ async def get_fitness_goals(api_version: str = Depends(get_api_version)):
         success=True,
         data={"goals": goals},
         message="Fitness goals retrieved successfully",
+        error=None,
+        detail=None,
+        status_code=None,
         timestamp=datetime.utcnow().isoformat() + "Z",
-        api_version=api_version
+        api_version=api_version,
+        error_code=None,
+        trace_id=None,
+        support_link=None
     )
 
 @router.get(

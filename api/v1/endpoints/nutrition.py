@@ -4,13 +4,25 @@ from fastapi import APIRouter, HTTPException, status, Depends
 from typing import List, Optional
 import logging
 from datetime import datetime
+import json
 
 from schemas.requests import NutritionEstimationRequest
 from schemas.responses import ApiResponse, ErrorResponse
 from utils.nutrition_estimator import nutrition_estimator
 from core.dependencies import get_api_version
+from core.error_handlers import (
+    NutritionEstimationException, ValidationException, ExternalServiceException
+)
 
 logger = logging.getLogger(__name__)
+
+# Add a dedicated logger for nutrition estimation logs
+nutrition_logger = logging.getLogger("nutrition_logger")
+if not nutrition_logger.handlers:
+    handler = logging.FileHandler("nutrition_estimations.log")
+    handler.setFormatter(logging.Formatter('%(message)s'))
+    nutrition_logger.addHandler(handler)
+    nutrition_logger.setLevel(logging.INFO)
 
 router = APIRouter(
     prefix="/nutrition",
@@ -56,6 +68,7 @@ router = APIRouter(
                                 "carbs": 29,
                                 "fat": 21
                             },
+                            "confidence_score": 95,
                             "validation": {
                                 "is_valid": True,
                                 "message": "Valid nutrition estimate"
@@ -126,11 +139,35 @@ async def estimate_nutrition(
             },
             "estimation_method": estimation_method
         }
+        if nutrition.get("fallback_used"):
+            response_data["fallback_used"] = True
+            response_data["warning_message"] = nutrition.get("warning_message")
         
         # Add warning if using fallback method
         message = "Nutrition estimated successfully"
         if estimation_method == "fallback":
             message = "Nutrition estimated successfully (using fallback method - OpenAI not available)"
+        
+        # --- LOGGING ---
+        nutrition_logger.info(json.dumps({
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "input": {
+                "meal_description": request.meal_description,
+                "serving_size": request.serving_size
+            },
+            "output": {
+                "nutrition": nutrition,
+                "confidence_score": nutrition.get("confidence_score", 70),
+                "estimation_method": estimation_method,
+                "validation": {
+                    "is_valid": is_valid,
+                    "message": validation_message
+                },
+                "fallback_used": nutrition.get("fallback_used", False),
+                "warning_message": nutrition.get("warning_message")
+            }
+        }))
+        # --- END LOGGING ---
         
         return ApiResponse(
             success=True,
@@ -142,10 +179,7 @@ async def estimate_nutrition(
         
     except Exception as e:
         logger.error(f"Error estimating nutrition: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Error estimating nutrition"
-        )
+        raise NutritionEstimationException(request.meal_description, str(e))
 
 @router.post(
     "/estimate-batch",
@@ -169,24 +203,29 @@ async def estimate_nutrition(
                             "meals": [
                                 {
                                     "meal_description": "Grilled chicken breast with quinoa",
+                                    "serving_size": "1 serving",
                                     "nutrition": {
                                         "calories": 485,
                                         "protein": 34,
                                         "carbs": 29,
                                         "fat": 21
-                                    }
+                                    },
+                                    "confidence_score": 95
                                 },
                                 {
                                     "meal_description": "Caesar salad with grilled salmon",
+                                    "serving_size": "1 serving",
                                     "nutrition": {
                                         "calories": 320,
                                         "protein": 28,
                                         "carbs": 15,
                                         "fat": 18
-                                    }
+                                    },
+                                    "confidence_score": 95
                                 }
                             ],
-                            "estimation_method": "openai"
+                            "estimation_method": "openai",
+                            "total_meals": 2
                         },
                         "message": "Batch nutrition estimation completed",
                         "timestamp": "2024-01-15T10:30:00Z",

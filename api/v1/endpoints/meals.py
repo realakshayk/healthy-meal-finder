@@ -13,6 +13,10 @@ from core.goal_matcher import goal_matcher
 from utils.freeform_query_parser import parse_freeform_query
 from schemas.requests import FreeformMealSearchRequest
 from core.analytics import log_meal_returned, log_goal_searched, get_all_stats
+from core.error_handlers import (
+    InvalidGoalException, NoMealsFoundException, InvalidLocationException,
+    InvalidRadiusException, ExternalServiceException, ValidationException
+)
 
 logger = logging.getLogger(__name__)
 
@@ -156,13 +160,7 @@ async def find_meals_endpoint(
             suggestions = []
             for g in goals:
                 suggestions.extend(goal_matcher.get_suggestions(g))
-            suggestion_text = ""
-            if suggestions:
-                suggestion_text = f" Did you mean: {', '.join([f'{name} ({goal_id})' for goal_id, name, score in suggestions[:2]])}?"
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Could not understand fitness goal(s) '{request.goal}'.{suggestion_text}"
-            )
+            raise InvalidGoalException(str(request.goal), suggestions)
         # Log analytics for all searched goals
         for mg in matched_goals:
             log_goal_searched(mg)
@@ -198,15 +196,12 @@ async def find_meals_endpoint(
             if dish:
                 log_meal_returned(dish, dish)
         if not unique_meals:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"No meals found within {request.radius_miles} miles of the specified location"
-            )
+            raise NoMealsFoundException(request.radius_miles, request.lat, request.lon)
         response_data = FindMealsResponse(
             meals=unique_meals,
             total_found=len(unique_meals),
             search_radius=request.radius_miles,
-            goal=matched_goals if len(matched_goals) > 1 else matched_goals[0]
+            goal=matched_goals[0] if matched_goals else "balanced"
         )
         message = f"Meals found successfully for goals: {matched_goals}"
         return ApiResponse(
@@ -214,17 +209,20 @@ async def find_meals_endpoint(
             data=response_data,
             message=message,
             timestamp=datetime.utcnow().isoformat() + "Z",
-            api_version=api_version
+            api_version=api_version,
+            error=None,
+            detail=None,
+            status_code=None,
+            error_code=None,
+            trace_id=None,
+            support_link=None
         )
         
-    except HTTPException:
+    except (HTTPException, InvalidGoalException, NoMealsFoundException):
         raise
     except Exception as e:
         logger.error(f"Error finding meals: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Internal server error while processing meal request"
-        )
+        raise ExternalServiceException("Meal Service", "finding meals")
 
 @router.post(
     "/freeform-search",
@@ -257,9 +255,16 @@ async def freeform_meal_search(
         # In a real app, you might use IP geolocation or prompt for location
         return ApiResponse(
             success=False,
-            error="Location required for 'near me' searches.",
+            data=None,
             message="Please provide your latitude and longitude.",
-            api_version=api_version
+            error="Location required for 'near me' searches.",
+            detail="Location coordinates are required for 'near me' searches",
+            status_code=400,
+            timestamp=datetime.utcnow().isoformat() + "Z",
+            api_version=api_version,
+            error_code="ERR_LOCATION_REQUIRED",
+            trace_id=None,
+            support_link="https://support.healthymealfinder.com/errors/ERR_LOCATION_REQUIRED"
         )
     # Use existing meal search logic (mocked here)
     # You would call your meal_service.find_meals() with the mapped filters
@@ -276,7 +281,14 @@ async def freeform_meal_search(
             "lon": lon
         },
         message="Freeform query parsed successfully.",
-        api_version=api_version
+        error=None,
+        detail=None,
+        status_code=None,
+        timestamp=datetime.utcnow().isoformat() + "Z",
+        api_version=api_version,
+        error_code=None,
+        trace_id=None,
+        support_link=None
     )
 
 @router.get(
@@ -356,8 +368,14 @@ async def get_fitness_goals(api_version: str = Depends(get_api_version)):
         success=True,
         data={"goals": goals},
         message="Fitness goals retrieved successfully",
+        error=None,
+        detail=None,
+        status_code=None,
         timestamp=datetime.utcnow().isoformat() + "Z",
-        api_version=api_version
+        api_version=api_version,
+        error_code=None,
+        trace_id=None,
+        support_link=None
     )
 
 @router.get(

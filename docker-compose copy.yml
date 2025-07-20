@@ -1,0 +1,29 @@
+version: '3.9'
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: healthy-meal-finder-api
+    ports:
+      - "8000:8000"
+    environment:
+      - GOOGLE_MAPS_API_KEY=${GOOGLE_MAPS_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ENVIRONMENT=development
+      - DEBUG=true
+    volumes:
+      - .:/app
+    command: uvicorn healthy-meal-finder.main:app --host 0.0.0.0 --port 8000
+
+  mock-client:
+    build:
+      context: .
+      dockerfile: Dockerfile.client
+    container_name: healthy-meal-finder-mock-client
+    depends_on:
+      - api
+    environment:
+      - API_URL=http://api:8000
+    command: python healthy-meal-finder/test_partner_api.py 

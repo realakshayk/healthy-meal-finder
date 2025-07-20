@@ -26,8 +26,19 @@ class FindMealsRequest(BaseModel):
         description="Fitness goal(s) (accepts a string or list of natural language goals, e.g. ['keto', 'muscle_gain'])",
         example=["keto", "muscle_gain"]
     )
+    cuisine: Optional[str] = Field(
+        default=None,
+        description="Preferred cuisine type (e.g., 'japanese', 'italian', 'indian')",
+        example="japanese"
+    )
+    flavor_profile: Optional[str] = Field(
+        default=None,
+        description="Preferred flavor profile (e.g., 'savory', 'spicy', 'umami')",
+        example="savory"
+    )
     radius_miles: float = Field(description="Search radius in miles (maximum 50 miles)", example=5.0)
-    max_results: int = Field(default=10, description="Maximum number of meal recommendations to return", example=10)
+    max_results: int = Field(default=5, description="Maximum number of meal recommendations to return", example=5)
+    restaurant_limit: int = Field(default=5, description="Maximum number of restaurants to process and scrape", example=5)
     exclude_ingredients: Optional[List[str]] = Field(
         default=None,
         description="List of ingredients to exclude from meal results (e.g., ['peanuts', 'gluten'])",
@@ -50,14 +61,44 @@ class FindMealsRequest(BaseModel):
         else:
             raise ValueError("Goal must be a string or list of strings")
     
+    @validator('radius_miles')
+    def validate_radius(cls, v):
+        """
+        Validate search radius is within reasonable limits.
+        """
+        if v < 0.5 or v > 10:
+            raise ValueError("Search radius must be between 0.5 and 10 miles")
+        return v
+    
+    @validator('max_results')
+    def validate_max_results(cls, v):
+        """
+        Validate max results is within reasonable limits.
+        """
+        if v < 1 or v > 15:
+            raise ValueError("Max results must be between 1 and 15")
+        return v
+    
+    @validator('restaurant_limit')
+    def validate_restaurant_limit(cls, v):
+        """
+        Validate restaurant limit is within reasonable limits.
+        """
+        if v < 1 or v > 20:
+            raise ValueError("Restaurant limit must be between 1 and 20")
+        return v
+    
     class Config:
         json_schema_extra = {
             "example": {
                 "lat": 40.7128,
                 "lon": -74.0060,
                 "goal": "musle gain",
-                "radius_miles": 5.0,
-                "max_results": 10
+                "cuisine": "japanese",
+                "flavor_profile": "savory",
+                "radius_miles": 1.24,
+                "max_results": 5,
+                "restaurant_limit": 5
             }
         }
 

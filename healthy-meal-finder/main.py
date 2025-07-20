@@ -67,6 +67,7 @@ import logging
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 from datetime import datetime
 import re
@@ -189,6 +190,12 @@ app = FastAPI(
 # --- Include API Routers ---
 app.include_router(api_router)
 
+# --- Serve Static Files ---
+try:
+    app.mount("/static", StaticFiles(directory="static"), name="static")
+except Exception as e:
+    logger.warning(f"Could not mount static files: {e}")
+
 # --- Root Endpoint ---
 @app.get(
     "/",
@@ -249,7 +256,13 @@ async def root():
         },
         message="API information retrieved successfully",
         timestamp=datetime.utcnow().isoformat() + "Z",
-        api_version="v1"
+        api_version="v1",
+        error=None,
+        detail=None,
+        status_code=None,
+        error_code=None,
+        trace_id=None,
+        support_link=None
     )
 
 # --- Global Exception Handler ---
@@ -292,7 +305,7 @@ async def global_exception_handler(request: Request, exc: Exception):
             error_code=error_code,
             trace_id=trace_id,
             support_link=support_link
-        ).dict(),
+        ).model_dump(),
         headers=getattr(exc, 'headers', {})
     )
 
@@ -319,7 +332,7 @@ async def not_found_handler(request: Request, exc: HTTPException):
             error_code="ERR_ENDPOINT_NOT_FOUND",
             trace_id=trace_id,
             support_link="https://support.healthymealfinder.com/errors/ERR_ENDPOINT_NOT_FOUND"
-        ).dict()
+        ).model_dump()
     )
 
 @app.middleware("http")

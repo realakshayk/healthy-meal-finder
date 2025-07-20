@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Good Eats MVP - Healthy Meal Finder</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .location-section {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        .location-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .location-icon {
+            font-size: 1.5em;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 1em;
+            transition: transform 0.2s;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .search-section {
+            margin-bottom: 20px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            font-size: 1em;
+            transition: border-color 0.3s;
+        }
+
+        .form-group input:focus, .form-group select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .form-group small {
+            color: #666;
+            font-size: 0.85em;
+            margin-top: 4px;
+            display: block;
+        }
+
+        .search-section {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        .search-section h3 {
+            margin-bottom: 15px;
+            color: #333;
+        }
+
+        .results {
+            margin-top: 30px;
+        }
+
+        .meal-card {
+            background: white;
+            border: 1px solid #e1e5e9;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            transition: transform 0.2s;
+        }
+
+        .meal-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+        }
+
+        .meal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 10px;
+        }
+
+        .meal-name {
+            font-size: 1.2em;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .meal-score {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 5px 12px;
+            border-radius: 15px;
+            font-size: 0.9em;
+            font-weight: 600;
+        }
+
+        .meal-restaurant {
+            color: #666;
+            font-size: 0.9em;
+            margin-bottom: 8px;
+        }
+
+        .meal-description {
+            color: #555;
+            margin-bottom: 10px;
+            line-height: 1.4;
+        }
+
+        .meal-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            margin-bottom: 10px;
+        }
+
+        .tag {
+            background: #e9ecef;
+            color: #495057;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 0.8em;
+        }
+
+        .meal-price {
+            font-weight: 600;
+            color: #28a745;
+            font-size: 1.1em;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .success {
+            background: #d4edda;
+            color: #155724;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .coordinates {
+            font-family: monospace;
+            background: #f8f9fa;
+            padding: 8px 12px;
+            border-radius: 5px;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🥗 Good Eats MVP</h1>
+            <p>Find healthy meals near you based on your fitness goals</p>
+        </div>
+
+        <div class="content">
+            <div class="location-section">
+                <div class="location-info">
+                    <span class="location-icon">📍</span>
+                    <div>
+                        <h3>Your Location</h3>
+                        <p>We'll use your device's location to find nearby restaurants</p>
+                    </div>
+                </div>
+                <button id="getLocationBtn" class="btn">Get My Location</button>
+                <div id="locationStatus" style="margin-top: 10px;"></div>
+                <div id="coordinates" class="coordinates" style="margin-top: 10px; display: none;"></div>
+            </div>
+
+            <div class="search-section">
+                <h3>🔧 Customize Your Search</h3>
+                <p style="margin-bottom: 15px; color: #666;">Configure your search parameters before getting your location:</p>
+                <div class="form-group">
+                    <label for="goalSelect">Fitness Goal:</label>
+                    <select id="goalSelect">
+                        <option value="muscle_gain">Muscle Gain</option>
+                        <option value="weight_loss">Weight Loss</option>
+                        <option value="keto">Keto</option>
+                        <option value="balanced">Balanced</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="cuisineSelect">Cuisine Preference (Optional):</label>
+                    <select id="cuisineSelect">
+                        <option value="">Any Cuisine</option>
+                        <option value="japanese">Japanese</option>
+                        <option value="indian">Indian</option>
+                        <option value="italian">Italian</option>
+                        <option value="mexican">Mexican</option>
+                        <option value="chinese">Chinese</option>
+                        <option value="thai">Thai</option>
+                        <option value="mediterranean">Mediterranean</option>
+                        <option value="american">American</option>
+                        <option value="french">French</option>
+                        <option value="greek">Greek</option>
+                        <option value="korean">Korean</option>
+                        <option value="vietnamese">Vietnamese</option>
+                        <option value="middle_eastern">Middle Eastern</option>
+                        <option value="caribbean">Caribbean</option>
+                        <option value="african">African</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="flavorProfileSelect">Flavor Profile (Optional):</label>
+                    <select id="flavorProfileSelect">
+                        <option value="">Any Flavor</option>
+                        <option value="savory">Savory</option>
+                        <option value="sweet">Sweet</option>
+                        <option value="spicy">Spicy</option>
+                        <option value="umami">Umami</option>
+                        <option value="tangy">Tangy</option>
+                        <option value="herbaceous">Herbaceous</option>
+                        <option value="smoky">Smoky</option>
+                        <option value="creamy">Creamy</option>
+                        <option value="fresh">Fresh</option>
+                        <option value="rich">Rich</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="radiusInput">Search Radius (miles):</label>
+                    <input type="number" id="radiusInput" value="1.24" min="0.5" max="10" step="0.1">
+                    <small>How far to search for restaurants (0.5-10 miles)</small>
+                </div>
+                <div class="form-group">
+                    <label for="restaurantLimitInput">Max Restaurants to Process:</label>
+                    <input type="number" id="restaurantLimitInput" value="5" min="1" max="20" step="1">
+                    <small>Number of restaurants to scrape and analyze (1-20)</small>
+                </div>
+                <div class="form-group">
+                    <label for="mealLimitInput">Max Meals to Recommend:</label>
+                    <input type="number" id="mealLimitInput" value="5" min="1" max="15" step="1">
+                    <small>Number of top meals to return (1-15)</small>
+                </div>
+                <button id="searchBtn" class="btn" disabled>Find Meals</button>
+            </div>
+
+            <div id="status"></div>
+            <div id="results" class="results"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8000/api/v1';
+        const API_KEY = 'testkey123'; // Default test key
+
+        let userLocation = null;
+
+        // Get user location
+        document.getElementById('getLocationBtn').addEventListener('click', () => {
+            const statusDiv = document.getElementById('locationStatus');
+            const btn = document.getElementById('getLocationBtn');
+            
+            btn.disabled = true;
+            btn.textContent = 'Getting Location...';
+            statusDiv.innerHTML = '<div class="loading">Requesting location permission...</div>';
+
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        userLocation = {
+                            lat: position.coords.latitude,
+                            lon: position.coords.longitude
+                        };
+                        
+                        statusDiv.innerHTML = '<div class="success">✅ Location obtained successfully!</div>';
+                        document.getElementById('coordinates').textContent = 
+                            `Lat: ${userLocation.lat.toFixed(6)}, Lon: ${userLocation.lon.toFixed(6)}`;
+                        document.getElementById('coordinates').style.display = 'block';
+                        document.getElementById('searchBtn').disabled = false;
+                        btn.textContent = 'Location Obtained';
+                    },
+                    (error) => {
+                        let errorMessage = 'Failed to get location: ';
+                        switch(error.code) {
+                            case error.PERMISSION_DENIED:
+                                errorMessage += 'Permission denied. Please allow location access.';
+                                break;
+                            case error.POSITION_UNAVAILABLE:
+                                errorMessage += 'Location information unavailable.';
+                                break;
+                            case error.TIMEOUT:
+                                errorMessage += 'Location request timed out.';
+                                break;
+                            default:
+                                errorMessage += 'Unknown error occurred.';
+                        }
+                        
+                        statusDiv.innerHTML = `<div class="error">❌ ${errorMessage}</div>`;
+                        btn.disabled = false;
+                        btn.textContent = 'Get My Location';
+                    },
+                    {
+                        enableHighAccuracy: true,
+                        timeout: 10000,
+                        maximumAge: 60000
+                    }
+                );
+            } else {
+                statusDiv.innerHTML = '<div class="error">❌ Geolocation is not supported by this browser.</div>';
+                btn.disabled = false;
+                btn.textContent = 'Get My Location';
+            }
+        });
+
+        // Search for meals
+        document.getElementById('searchBtn').addEventListener('click', async () => {
+            if (!userLocation) {
+                alert('Please get your location first!');
+                return;
+            }
+
+            const goal = document.getElementById('goalSelect').value;
+            const cuisine = document.getElementById('cuisineSelect').value;
+            const flavorProfile = document.getElementById('flavorProfileSelect').value;
+            const radius = parseFloat(document.getElementById('radiusInput').value);
+            const restaurantLimit = parseInt(document.getElementById('restaurantLimitInput').value);
+            const mealLimit = parseInt(document.getElementById('mealLimitInput').value);
+            
+            // Validate input ranges
+            if (radius < 0.5 || radius > 10) {
+                alert('Search radius must be between 0.5 and 10 miles');
+                return;
+            }
+            if (restaurantLimit < 1 || restaurantLimit > 20) {
+                alert('Restaurant limit must be between 1 and 20');
+                return;
+            }
+            if (mealLimit < 1 || mealLimit > 15) {
+                alert('Meal limit must be between 1 and 15');
+                return;
+            }
+            
+            const statusDiv = document.getElementById('status');
+            const resultsDiv = document.getElementById('results');
+            const btn = document.getElementById('searchBtn');
+
+            btn.disabled = true;
+            btn.textContent = 'Searching...';
+            const cuisineText = cuisine ? ` | Cuisine: ${cuisine}` : '';
+            const flavorText = flavorProfile ? ` | Flavor: ${flavorProfile}` : '';
+            statusDiv.innerHTML = `<div class="loading">🔍 Searching for healthy meals near you...<br>
+                <small>Radius: ${radius} miles | Restaurants: ${restaurantLimit} | Meals: ${mealLimit}${cuisineText}${flavorText}</small></div>`;
+            resultsDiv.innerHTML = '';
+
+            try {
+                const response = await fetch(`${API_BASE}/meals/find`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-API-Key': API_KEY
+                    },
+                    body: JSON.stringify({
+                        lat: userLocation.lat,
+                        lon: userLocation.lon,
+                        goal: goal,
+                        cuisine: cuisine || null,
+                        flavor_profile: flavorProfile || null,
+                        radius_miles: radius,
+                        max_results: mealLimit,
+                        restaurant_limit: restaurantLimit
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success && data.data && data.data.meals) {
+                    const meals = data.data.meals;
+                    statusDiv.innerHTML = `<div class="success">✅ Found ${meals.length} meals near you!</div>`;
+                    
+                    resultsDiv.innerHTML = meals.map(meal => `
+                        <div class="meal-card">
+                            <div class="meal-header">
+                                <div class="meal-name">${meal.dish}</div>
+                                <div class="meal-score">${(meal.relevance_score * 100).toFixed(0)}% match</div>
+                            </div>
+                            <div class="meal-restaurant">🏢 ${meal.restaurant}</div>
+                            <div class="meal-description">${meal.description || 'No description available'}</div>
+                            ${meal.tags && meal.tags.length > 0 ? `
+                                <div class="meal-tags">
+                                    ${meal.tags.map(tag => `<span class="tag">${tag}</span>`).join('')}
+                                </div>
+                            ` : ''}
+                            ${meal.price ? `<div class="meal-price">💰 ${meal.price}</div>` : ''}
+                        </div>
+                    `).join('');
+                } else {
+                    statusDiv.innerHTML = `<div class="error">❌ ${data.message || 'No meals found'}</div>`;
+                }
+            } catch (error) {
+                statusDiv.innerHTML = `<div class="error">❌ Error: ${error.message}</div>`;
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Find Meals';
+            }
+        });
+    </script>
+</body>
+</html> 
